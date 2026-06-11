@@ -17,14 +17,14 @@ export class StatusBar {
         this.container.innerHTML = `
       <div class="status-item">
         <span class="status-dot" id="status-pick"></span>
-        <span id="status-pick-text">오른손 피크 그립: 대기</span>
+        <span id="status-pick-text">🤏 오른손 피크: 엄지+검지 모아 잡기</span>
       </div>
       <div class="status-item">
         <span id="status-fps">FPS: --</span>
       </div>
       <div class="status-item">
         <span class="status-dot" id="status-pinch"></span>
-        <span id="status-pinch-text">왼손 코드 터치: 대기</span>
+        <span id="status-pinch-text">👆 왼손 코드: 검지로 터치</span>
       </div>
     `;
 
@@ -49,19 +49,19 @@ export class StatusBar {
         // 오른손 피크 그립
         if (info.rightPickGrip) {
             pickDot.className = 'status-dot active';
-            pickText.textContent = '오른손 피크 그립: 감지됨';
+            pickText.textContent = '🤏 피크 잡음! → 아래로 스트로크하세요';
         } else {
             pickDot.className = 'status-dot';
-            pickText.textContent = '오른손 피크 그립: 대기';
+            pickText.textContent = '🤏 오른손 피크: 엄지+검지 모아 잡기';
         }
 
         // 왼손 코드 터치
         if (info.leftPinch) {
             pinchDot.className = 'status-dot active';
-            pinchText.textContent = '왼손 코드 터치: 감지됨';
+            pinchText.textContent = '👆 코드 선택됨!';
         } else {
             pinchDot.className = 'status-dot';
-            pinchText.textContent = '왼손 코드 터치: 대기';
+            pinchText.textContent = '👆 왼손 코드: 검지로 터치';
         }
     }
 

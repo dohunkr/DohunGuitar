@@ -118,7 +118,7 @@ const camera = new window.Camera(video, {
 });
 
 camera.start().then(() => {
-    statusBar.setMessage('카메라 준비 완료 — 왼손으로 코드 터치, 오른손 스트로크로 연주');
+    statusBar.setMessage('카메라 준비 완료 — 왼손: 코드 터치 선택 | 오른손: 엄지+검지로 피크 잡고 아래로 스트로크!');
 });
 
 // AudioContext unlock (사용자 인터랙션 필요)
