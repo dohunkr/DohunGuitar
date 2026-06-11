@@ -107,7 +107,7 @@ const camera = new window.Camera(video, {
 });
 
 camera.start().then(() => {
-    statusBar.setMessage('카메라 준비 완료 — 왼손 핀치로 코드 선택, 오른손 스트로크로 연주');
+    statusBar.setMessage('카메라 준비 완료 — 왼손으로 코드 터치, 오른손 스트로크로 연주');
 });
 
 // AudioContext unlock (사용자 인터랙션 필요)

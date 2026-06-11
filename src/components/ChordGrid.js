@@ -1,6 +1,6 @@
 /**
- * ChordGrid.js — 왼손 손목 위치에 고정되는 2행 8열 코드 그리드
- * 캔버스 위에 직접 렌더링, 핀치로 코드 선택
+ * ChordGrid.js — 화면 하단 고정 2행 8열 코드 그리드
+ * 캔버스 위에 직접 렌더링, 손가락 터치로 코드 선택
  */
 
 // 코드 배열: 2행 8열
@@ -11,78 +11,59 @@ const GRID = [ROW1, ROW2];
 const COLS = 8;
 const ROWS = 2;
 
-// 셀 크기 (픽셀)
-const CELL_W = 70;
-const CELL_H = 50;
-const CELL_GAP = 4;
-const GRID_PADDING = 6;
+// 셀 크기 (픽셀) — 크게! 유치원생도 터치 가능
+const CELL_W = 120;
+const CELL_H = 64;
+const CELL_GAP = 6;
+const GRID_PADDING = 10;
 
 // 전체 그리드 크기
-const GRID_W = COLS * CELL_W + (COLS - 1) * CELL_GAP + GRID_PADDING * 2;
-const GRID_H = ROWS * CELL_H + (ROWS - 1) * CELL_GAP + GRID_PADDING * 2;
+const GRID_TOTAL_W = COLS * CELL_W + (COLS - 1) * CELL_GAP + GRID_PADDING * 2;
+const GRID_TOTAL_H = ROWS * CELL_H + (ROWS - 1) * CELL_GAP + GRID_PADDING * 2;
+
+// Design.md 색상
+const COLOR_PRIMARY = '#6366F1';       // indigo
+const COLOR_PRIMARY_GLOW = 'rgba(99, 102, 241, 0.35)';
+const COLOR_CELL_BG = 'rgba(10, 10, 10, 0.55)';
+const COLOR_CELL_HOVER = 'rgba(99, 102, 241, 0.2)';
+const COLOR_CELL_ACTIVE = 'rgba(99, 102, 241, 0.45)';
+const COLOR_BORDER = 'rgba(232, 232, 236, 0.3)'; // #E8E8EC 30%
+const COLOR_ACTIVE_BORDER = 'rgba(99, 102, 241, 0.9)';
+const COLOR_TEXT = '#FAFAFA';          // near-white
+const COLOR_GRID_OUTLINE = 'rgba(99, 102, 241, 0.6)';
 
 export class ChordGrid {
-    /**
-     * @param {Function} onSelect 코드 선택 콜백
-     */
     constructor(onSelect) {
         this.onSelect = onSelect;
         this.activeChord = null;
         this.hoveredChord = null;
-        this.visible = false;
-
-        // 그리드 기준점 (왼손 손목 픽셀 좌표)
-        this._anchorX = 0;
-        this._anchorY = 0;
     }
 
     /**
-     * 왼손 손목 좌표로 그리드 위치 업데이트
-     * @param {number} px 손목 x (캔버스 픽셀)
-     * @param {number} py 손목 y (캔버스 픽셀)
+     * 그리드 좌상단 좌표 계산 — 화면 하단 중앙 고정
      */
-    setAnchor(px, py) {
-        this._anchorX = px;
-        this._anchorY = py;
-        this.visible = true;
-    }
-
-    /** 왼손 미감지 시 그리드 숨김 */
-    hide() {
-        this.visible = false;
-    }
-
-    /**
-     * 그리드 좌상단 좌표 계산 (손목이 정중앙)
-     */
-    _getOrigin() {
-        return {
-            x: this._anchorX - GRID_W / 2,
-            y: this._anchorY - GRID_H / 2,
-        };
+    _getOrigin(canvasW, canvasH) {
+        const x = (canvasW - GRID_TOTAL_W) / 2;
+        const y = canvasH - GRID_TOTAL_H - 24; // 하단 24px 여백
+        return { x, y };
     }
 
     /**
      * 캔버스에 코드 그리드 렌더링
-     * @param {CanvasRenderingContext2D} ctx
-     * @param {number} canvasW
-     * @param {number} canvasH
      */
     draw(ctx, canvasW, canvasH) {
-        if (!this.visible) return;
-
-        const origin = this._getOrigin();
+        const origin = this._getOrigin(canvasW, canvasH);
 
         // 외곽선 박스
         ctx.save();
-        ctx.strokeStyle = '#00BCD4';
+        ctx.strokeStyle = COLOR_GRID_OUTLINE;
         ctx.lineWidth = 2;
         ctx.lineJoin = 'round';
-        this._roundRect(ctx, origin.x, origin.y, GRID_W, GRID_H, 8);
+        this._roundRect(ctx, origin.x, origin.y, GRID_TOTAL_W, GRID_TOTAL_H, 12);
         ctx.stroke();
 
-        // 반투명 배경
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        // 전체 배경
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
         ctx.fill();
         ctx.restore();
 
@@ -100,29 +81,34 @@ export class ChordGrid {
 
                 // 셀 배경
                 if (isActive) {
-                    ctx.fillStyle = 'rgba(0, 188, 212, 0.4)';
+                    ctx.fillStyle = COLOR_CELL_ACTIVE;
                 } else if (isHovered) {
-                    ctx.fillStyle = 'rgba(0, 188, 212, 0.2)';
+                    ctx.fillStyle = COLOR_CELL_HOVER;
                 } else {
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    ctx.fillStyle = COLOR_CELL_BG;
                 }
 
-                this._roundRect(ctx, cellX, cellY, CELL_W, CELL_H, 4);
+                this._roundRect(ctx, cellX, cellY, CELL_W, CELL_H, 6);
                 ctx.fill();
 
                 // 셀 테두리
                 if (isActive) {
-                    ctx.strokeStyle = '#00BCD4';
-                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = COLOR_ACTIVE_BORDER;
+                    ctx.lineWidth = 2.5;
+                    // 글로우 효과
+                    ctx.shadowColor = COLOR_PRIMARY_GLOW;
+                    ctx.shadowBlur = 12;
                 } else {
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.strokeStyle = COLOR_BORDER;
                     ctx.lineWidth = 1;
                 }
                 ctx.stroke();
+                ctx.shadowBlur = 0;
 
                 // 코드 텍스트
-                ctx.fillStyle = '#FFFFFF';
-                ctx.font = 'bold 16px "DM Sans", sans-serif';
+                ctx.fillStyle = isActive ? '#FFFFFF' : COLOR_TEXT;
+                const fontSize = isActive ? 22 : 20;
+                ctx.font = `bold ${fontSize}px "General Sans", "DM Sans", sans-serif`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(chord, cellX + CELL_W / 2, cellY + CELL_H / 2);
@@ -133,15 +119,10 @@ export class ChordGrid {
     }
 
     /**
-     * 핀치 위치(캔버스 픽셀)로 코드 존 충돌 감지
-     * @param {number} px 검지 tip x (캔버스 픽셀)
-     * @param {number} py 검지 tip y (캔버스 픽셀)
-     * @returns {string|null}
+     * 손 위치(캔버스 픽셀)로 코드 존 충돌 감지
      */
-    hitTest(px, py) {
-        if (!this.visible) return null;
-
-        const origin = this._getOrigin();
+    hitTest(px, py, canvasW, canvasH) {
+        const origin = this._getOrigin(canvasW, canvasH);
 
         for (let row = 0; row < ROWS; row++) {
             for (let col = 0; col < COLS; col++) {

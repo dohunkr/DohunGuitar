@@ -52,10 +52,7 @@ export class HandOverlay {
         canvas.height = h;
         ctx.clearRect(0, 0, w, h);
 
-        // CSS scaleX(-1)로 전체 캔버스가 반전되므로
-        // 캔버스 내에서는 좌표만 x = 1-x 보정하여 그림
-
-        // 코드 그리드 그리기 (GestureDetector에서 setAnchor로 위치 설정됨)
+        // 코드 그리드 그리기 (화면 하단 고정)
         if (this.chordGrid) {
             this.chordGrid.draw(ctx, w, h);
         }
