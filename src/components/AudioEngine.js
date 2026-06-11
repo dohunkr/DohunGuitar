@@ -27,6 +27,7 @@ export class AudioEngine {
         this.masterGain = null;
         this.compressor = null;
         this.isReady = false;
+        this._activeNodes = [];
     }
 
     /** AudioContext를 초기화 (사용자 제스처 후 호출) */
@@ -51,6 +52,25 @@ export class AudioEngine {
     }
 
     /**
+     * 이전 스트럼의 활성 노드를 빠르게 페이드아웃
+     * 맥놀이(beat frequency) 방지를 위해 새 스트럼 전 호출
+     */
+    _fadeOutActive() {
+        const now = this.ctx.currentTime;
+        this._activeNodes.forEach(({ envelope, osc }) => {
+            try {
+                envelope.gain.cancelScheduledValues(now);
+                envelope.gain.setValueAtTime(envelope.gain.value, now);
+                envelope.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+                osc.stop(now + 0.1);
+            } catch (e) {
+                // 이미 정지된 노드 무시
+            }
+        });
+        this._activeNodes = [];
+    }
+
+    /**
      * 코드를 스트럼(연주)
      * @param {string} chordName 코드 이름 (예: 'C', 'Am')
      * @param {number} velocity 스트로크 세기 (0~1)
@@ -58,6 +78,8 @@ export class AudioEngine {
      */
     strum(chordName, velocity = 0.5, intensityMultiplier = 1) {
         if (!this.isReady) this.init();
+
+        this._fadeOutActive();
 
         const freqs = CHORD_FREQUENCIES[chordName];
         if (!freqs) return;
@@ -79,6 +101,8 @@ export class AudioEngine {
     preview(chordName) {
         if (!this.isReady) this.init();
 
+        this._fadeOutActive();
+
         const freqs = CHORD_FREQUENCIES[chordName];
         if (!freqs) return;
 
@@ -90,51 +114,39 @@ export class AudioEngine {
 
     /**
      * 단일 줄 플럭 시뮬레이션
-     * Karplus-Strong 간소화 — 오실레이터 + 필터 + 엔벨로프
+     * 삼각파 오실레이터 + 로우패스 필터 + 엔벨로프
      */
     _pluckString(freq, startTime, volume = 0.5, duration = 1.5) {
         const ctx = this.ctx;
 
-        // 오실레이터 (삼각파 → 기타 유사 톤)
+        // 오실레이터 (삼각파 — 깨끗한 기타 유사 톤)
         const osc = ctx.createOscillator();
         osc.type = 'triangle';
         osc.frequency.value = freq;
 
-        // 고조파 추가용 오실레이터
-        const osc2 = ctx.createOscillator();
-        osc2.type = 'sawtooth';
-        osc2.frequency.value = freq;
-
         // 필터 — 고주파를 시간에 따라 감쇠 (기타 줄 느낌)
         const filter = ctx.createBiquadFilter();
         filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(4000, startTime);
-        filter.frequency.exponentialRampToValueAtTime(300, startTime + duration);
-        filter.Q.value = 1;
+        filter.frequency.setValueAtTime(3500, startTime);
+        filter.frequency.exponentialRampToValueAtTime(400, startTime + duration);
+        filter.Q.value = 0.7;
 
         // 엔벨로프
         const envelope = ctx.createGain();
         envelope.gain.setValueAtTime(0, startTime);
-        envelope.gain.linearRampToValueAtTime(volume * 0.6, startTime + 0.005);
+        envelope.gain.linearRampToValueAtTime(volume * 0.5, startTime + 0.005);
         envelope.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
 
-        // 2차 오실레이터 (낮은 볼륨으로 질감 추가)
-        const envelope2 = ctx.createGain();
-        envelope2.gain.setValueAtTime(0, startTime);
-        envelope2.gain.linearRampToValueAtTime(volume * 0.15, startTime + 0.005);
-        envelope2.gain.exponentialRampToValueAtTime(0.001, startTime + duration * 0.6);
-
-        // 연결
+        // 연결: osc → filter → envelope → masterGain
         osc.connect(filter);
-        osc2.connect(envelope2);
-        envelope2.connect(filter);
         filter.connect(envelope);
         envelope.connect(this.masterGain);
 
         osc.start(startTime);
-        osc2.start(startTime);
         osc.stop(startTime + duration + 0.05);
-        osc2.stop(startTime + duration + 0.05);
+
+        // 활성 노드 추적 (다음 스트럼 시 페이드아웃용)
+        this._activeNodes.push({ envelope, osc });
     }
 
     /** 사용 가능한 코드 목록 반환 */
