@@ -12,8 +12,8 @@ export class GestureDetector {
         this.onStrum = onStrum;
         this.onStatusUpdate = onStatusUpdate;
 
-        // 설정 — 감도를 대폭 높임
-        this.strumMinVelocity = 0.006; // 기존 0.012 → 0.006 (2배 민감)
+        // 설정 — 피크 그립 필수 + 적절한 감도
+        this.strumMinVelocity = 0.015; // 미세 떨림 무시, 확실한 스트로크만
         this.intensityMultiplier = 1;
         this.swapHands = false;
 
@@ -110,32 +110,36 @@ export class GestureDetector {
             this._chordHoldFrames = 0;
         }
 
-        // ---- 오른손(스트로크): 아래 스와이프 감지 ----
-        if (strumHand) {
+        // ---- 오른손(스트로크): 피크 그립 + 아래 스와이프 감지 ----
+        const pickGrip = strumHand ? isPickGrip(strumHand, 0.08) : false;
+
+        if (strumHand && pickGrip) {
+            // 피크 그립 상태일 때만 스트럼 감지
             const wristY = strumHand[0].y;
 
             if (this._prevStrumY !== null) {
                 const vel = strokeVelocity(this._prevStrumY, wristY);
 
                 if (vel > this.strumMinVelocity && !this._strumCooldown) {
-                    const normalizedVel = Math.min(vel / 0.04, 1); // 0.06→0.04 더 쉽게 최대 세기
+                    const normalizedVel = Math.min(vel / 0.05, 1);
                     this.onStrum?.(normalizedVel, this.intensityMultiplier);
                     this._strumCooldown = true;
                     setTimeout(() => {
                         this._strumCooldown = false;
-                    }, 100); // 쿨다운 120→100ms
+                    }, 150); // 쿨다운 150ms
                 }
             }
 
             this._prevStrumY = wristY;
         } else {
+            // 피크 그립이 아니면 스트럼 추적 초기화
             this._prevStrumY = null;
         }
 
         // 상태 업데이트
         this.onStatusUpdate?.({
             leftPinch: isTouching,
-            rightPickGrip: strumHand ? isPickGrip(strumHand) : false,
+            rightPickGrip: pickGrip,
         });
     }
 }

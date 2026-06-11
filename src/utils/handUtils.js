@@ -64,12 +64,10 @@ export function toPixel(landmark, width, height) {
     };
 }
 
-/** 피크 그립 감지 (엄지-검지-중지 거리가 가까운지) */
-export function isPickGrip(landmarks, threshold = 0.06) {
+/** 피크 그립 감지 (엄지-검지 끝이 가까운지 = 피크 잡는 자세) */
+export function isPickGrip(landmarks, threshold = 0.08) {
     const thumbTip = landmarks[4];
     const indexTip = landmarks[8];
-    const middleTip = landmarks[12];
-    const d1 = distance(thumbTip, indexTip);
-    const d2 = distance(thumbTip, middleTip);
-    return d1 < threshold && d2 < threshold;
+    const d = distance(thumbTip, indexTip);
+    return d < threshold;
 }
