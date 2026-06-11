@@ -8,6 +8,7 @@ import { GestureDetector } from './components/GestureDetector.js';
 import { HandOverlay } from './components/HandOverlay.js';
 import { ChordGrid } from './components/ChordGrid.js';
 import { StatusBar } from './components/StatusBar.js';
+import { LessonPanel } from './components/LessonPanel.js';
 import './styles/main.css';
 
 // ---- DOM 요소 ----
@@ -19,6 +20,7 @@ const strokeSlider = document.getElementById('stroke-intensity');
 const previewToggle = document.getElementById('preview-toggle');
 const swapHandsToggle = document.getElementById('swap-hands');
 const cameraSection = document.getElementById('camera-section');
+const lessonPanelContainer = document.getElementById('lesson-panel');
 
 // ---- 컴포넌트 초기화 ----
 const audioEngine = new AudioEngine();
@@ -30,6 +32,15 @@ let previewEnabled = false;
 
 // 코드 그리드 (캔버스 오버레이 방식 — 선택은 GestureDetector에서 처리)
 const chordGrid = new ChordGrid();
+
+// 강좌 가이드 패널
+const lessonPanel = new LessonPanel(lessonPanelContainer, {
+    onChordHighlight: (chord) => {
+        selectedChord = chord;
+        currentChordEl.textContent = chord;
+        audioEngine.preview(chord);
+    },
+});
 
 // HandOverlay에 ChordGrid 연결
 handOverlay.setChordGrid(chordGrid);
