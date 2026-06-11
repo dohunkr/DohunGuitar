@@ -1,22 +1,22 @@
 /**
- * ChordGrid.js — 왼손 검지 위 고정 2행 8열 코드 그리드
- * 캔버스 위에 직접 렌더링, EMA 스무딩으로 흔들림 방지
- * 검지가 셀 위에 있으면 터치 선택
+ * ChordGrid.js — 화면 하단 고정 코드 그리드
+ * 캔버스 위에 직접 렌더링, 왼손 검지로 터치 선택
+ * 화면 하단 중앙에 고정되어 안정적인 코드 전환 가능
  */
 
-// 코드 배열: 2행 8열
-const ROW1 = ['C', 'D', 'E', 'F', 'G', 'A', 'E7', 'B7'];
-const ROW2 = ['C7', 'Dm', 'Em', 'Fm', 'G7', 'A7', 'Am', 'F'];
+// 코드 배열: 2행 4열 (주요 코드만, 큰 셀)
+const ROW1 = ['C', 'F', 'G', 'Am'];
+const ROW2 = ['Dm', 'Em', 'A', 'E'];
 const GRID = [ROW1, ROW2];
 
-const COLS = 8;
+const COLS = 4;
 const ROWS = 2;
 
-// 셀 크기 (픽셀) — 크게! 유치원생도 터치 가능
-const CELL_W = 120;
-const CELL_H = 64;
-const CELL_GAP = 6;
-const GRID_PADDING = 10;
+// 셀 크기 (픽셀) — 크고 넉넉하게
+const CELL_W = 160;
+const CELL_H = 80;
+const CELL_GAP = 10;
+const GRID_PADDING = 14;
 
 // 전체 그리드 크기
 const GRID_TOTAL_W = COLS * CELL_W + (COLS - 1) * CELL_GAP + GRID_PADDING * 2;
@@ -25,63 +25,41 @@ const GRID_TOTAL_H = ROWS * CELL_H + (ROWS - 1) * CELL_GAP + GRID_PADDING * 2;
 // Design.md 색상
 const COLOR_PRIMARY_GLOW = 'rgba(99, 102, 241, 0.35)';
 const COLOR_CELL_BG = 'rgba(10, 10, 10, 0.55)';
-const COLOR_CELL_HOVER = 'rgba(99, 102, 241, 0.2)';
-const COLOR_CELL_ACTIVE = 'rgba(99, 102, 241, 0.45)';
+const COLOR_CELL_HOVER = 'rgba(99, 102, 241, 0.25)';
+const COLOR_CELL_ACTIVE = 'rgba(99, 102, 241, 0.5)';
 const COLOR_BORDER = 'rgba(232, 232, 236, 0.3)';
 const COLOR_ACTIVE_BORDER = 'rgba(99, 102, 241, 0.9)';
 const COLOR_TEXT = '#FAFAFA';
 const COLOR_GRID_OUTLINE = 'rgba(99, 102, 241, 0.6)';
-
-// EMA 스무딩 계수 (0~1, 작을수록 부드럽지만 느림)
-const EMA_ALPHA = 0.25;
 
 export class ChordGrid {
     constructor(onSelect) {
         this.onSelect = onSelect;
         this.activeChord = null;
         this.hoveredChord = null;
-
-        // 검지 앵커 좌표 (픽셀, EMA 스무딩 적용)
-        this._anchorX = null;
-        this._anchorY = null;
-        this._visible = false;
+        this._visible = true; // 화면 고정이므로 항상 보임
     }
 
     /**
-     * 왼손 검지 끝 좌표 업데이트 (캔버스 픽셀)
-     * EMA 스무딩 적용하여 흔들림 최소화
+     * 왼손 검지 좌표 업데이트 — 그리드 위치엔 영향 없음 (하단 고정)
+     * 왼손이 감지되었음을 표시하는 용도
      */
     setAnchor(px, py) {
-        if (this._anchorX === null) {
-            this._anchorX = px;
-            this._anchorY = py;
-        } else {
-            this._anchorX = EMA_ALPHA * px + (1 - EMA_ALPHA) * this._anchorX;
-            this._anchorY = EMA_ALPHA * py + (1 - EMA_ALPHA) * this._anchorY;
-        }
         this._visible = true;
     }
 
-    /** 왼손이 감지되지 않을 때 그리드 숨김 */
+    /** 왼손이 감지되지 않을 때 */
     hide() {
+        // 화면 고정이므로 그리드는 항상 보임 (투명도만 변경)
         this._visible = false;
-        this._anchorX = null;
-        this._anchorY = null;
     }
 
     /**
-     * 그리드 좌상단 좌표 계산 — 검지 위에 고정
+     * 그리드 좌상단 좌표 — 화면 하단 중앙 고정
      */
     _getOrigin(canvasW, canvasH) {
-        if (!this._visible || this._anchorX === null) return null;
-
-        let x = this._anchorX - GRID_TOTAL_W / 2;
-        let y = this._anchorY - GRID_TOTAL_H - 20;
-
-        // 화면 밖으로 나가지 않도록 클램핑
-        x = Math.max(4, Math.min(x, canvasW - GRID_TOTAL_W - 4));
-        y = Math.max(4, Math.min(y, canvasH - GRID_TOTAL_H - 4));
-
+        const x = (canvasW - GRID_TOTAL_W) / 2;
+        const y = canvasH - GRID_TOTAL_H - 20;
         return { x, y };
     }
 
@@ -91,6 +69,12 @@ export class ChordGrid {
     draw(ctx, canvasW, canvasH) {
         const origin = this._getOrigin(canvasW, canvasH);
         if (!origin) return;
+
+        // 왼손 미감지 시 투명하게
+        ctx.save();
+        if (!this._visible) {
+            ctx.globalAlpha = 0.3;
+        }
 
         // 외곽선 박스
         ctx.save();
@@ -144,7 +128,7 @@ export class ChordGrid {
 
                 // 코드 텍스트
                 ctx.fillStyle = isActive ? '#FFFFFF' : COLOR_TEXT;
-                const fontSize = isActive ? 22 : 20;
+                const fontSize = isActive ? 28 : 24;
                 ctx.font = `bold ${fontSize}px "General Sans", "DM Sans", sans-serif`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
@@ -153,6 +137,8 @@ export class ChordGrid {
                 ctx.restore();
             }
         }
+
+        ctx.restore(); // globalAlpha 복원
     }
 
     /**

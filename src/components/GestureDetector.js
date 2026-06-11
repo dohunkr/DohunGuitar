@@ -24,7 +24,7 @@ export class GestureDetector {
         // 코드 선택 디바운스
         this._lastSelectedChord = null;
         this._chordHoldFrames = 0;
-        this._chordSelectThreshold = 3; // 3프레임 유지 시 선택
+        this._chordSelectThreshold = 8; // 8프레임 유지 시 선택 (더 확실하게 머물러야 전환)
     }
 
     setIntensityMultiplier(value) {
