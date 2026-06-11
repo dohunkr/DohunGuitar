@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DohunGuitar — 공중 기타</title>
+
+    <!-- Fonts -->
+    <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@700&display=swap" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@400&display=swap"
+        rel="stylesheet" />
+</head>
+
+<body>
+    <!-- 상단 컨트롤 바 -->
+    <header id="control-bar">
+        <div class="control-bar__left">
+            <h1 class="app-title">DohunGuitar</h1>
+            <span id="current-chord" class="current-chord">—</span>
+        </div>
+        <div class="control-bar__center">
+            <label class="slider-group">
+                <span class="slider-label">핀치 감도</span>
+                <input type="range" id="pinch-sensitivity" min="20" max="80" value="45" />
+            </label>
+            <label class="slider-group">
+                <span class="slider-label">스트로크 세기</span>
+                <input type="range" id="stroke-intensity" min="1" max="10" value="5" />
+            </label>
+        </div>
+        <div class="control-bar__right">
+            <label class="checkbox-group">
+                <input type="checkbox" id="preview-toggle" />
+                <span>미리보기</span>
+            </label>
+            <label class="checkbox-group">
+                <input type="checkbox" id="swap-hands" />
+                <span>손 바꾸기</span>
+            </label>
+        </div>
+    </header>
+
+    <!-- 메인 영역 -->
+    <main id="app">
+        <!-- 코드 그리드 (왼쪽) -->
+        <aside id="chord-grid-container"></aside>
+
+        <!-- 웹캠 + 오버레이 (중앙) -->
+        <section id="camera-section">
+            <video id="webcam" autoplay playsinline></video>
+            <canvas id="overlay-canvas"></canvas>
+        </section>
+    </main>
+
+    <!-- 하단 상태 바 -->
+    <footer id="status-bar"></footer>
+
+    <!-- MediaPipe Hands CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+        crossorigin="anonymous"></script>
+
+    <!-- App Entry -->
+    <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
