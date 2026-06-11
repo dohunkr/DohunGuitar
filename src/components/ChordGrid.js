@@ -1,6 +1,7 @@
 /**
- * ChordGrid.js — 화면 하단 고정 2행 8열 코드 그리드
- * 캔버스 위에 직접 렌더링, 손가락 터치로 코드 선택
+ * ChordGrid.js — 왼손 검지 위 고정 2행 8열 코드 그리드
+ * 캔버스 위에 직접 렌더링, EMA 스무딩으로 흔들림 방지
+ * 검지가 셀 위에 있으면 터치 선택
  */
 
 // 코드 배열: 2행 8열
@@ -22,29 +23,65 @@ const GRID_TOTAL_W = COLS * CELL_W + (COLS - 1) * CELL_GAP + GRID_PADDING * 2;
 const GRID_TOTAL_H = ROWS * CELL_H + (ROWS - 1) * CELL_GAP + GRID_PADDING * 2;
 
 // Design.md 색상
-const COLOR_PRIMARY = '#6366F1';       // indigo
 const COLOR_PRIMARY_GLOW = 'rgba(99, 102, 241, 0.35)';
 const COLOR_CELL_BG = 'rgba(10, 10, 10, 0.55)';
 const COLOR_CELL_HOVER = 'rgba(99, 102, 241, 0.2)';
 const COLOR_CELL_ACTIVE = 'rgba(99, 102, 241, 0.45)';
-const COLOR_BORDER = 'rgba(232, 232, 236, 0.3)'; // #E8E8EC 30%
+const COLOR_BORDER = 'rgba(232, 232, 236, 0.3)';
 const COLOR_ACTIVE_BORDER = 'rgba(99, 102, 241, 0.9)';
-const COLOR_TEXT = '#FAFAFA';          // near-white
+const COLOR_TEXT = '#FAFAFA';
 const COLOR_GRID_OUTLINE = 'rgba(99, 102, 241, 0.6)';
+
+// EMA 스무딩 계수 (0~1, 작을수록 부드럽지만 느림)
+const EMA_ALPHA = 0.25;
 
 export class ChordGrid {
     constructor(onSelect) {
         this.onSelect = onSelect;
         this.activeChord = null;
         this.hoveredChord = null;
+
+        // 검지 앵커 좌표 (픽셀, EMA 스무딩 적용)
+        this._anchorX = null;
+        this._anchorY = null;
+        this._visible = false;
     }
 
     /**
-     * 그리드 좌상단 좌표 계산 — 화면 하단 중앙 고정
+     * 왼손 검지 끝 좌표 업데이트 (캔버스 픽셀)
+     * EMA 스무딩 적용하여 흔들림 최소화
+     */
+    setAnchor(px, py) {
+        if (this._anchorX === null) {
+            this._anchorX = px;
+            this._anchorY = py;
+        } else {
+            this._anchorX = EMA_ALPHA * px + (1 - EMA_ALPHA) * this._anchorX;
+            this._anchorY = EMA_ALPHA * py + (1 - EMA_ALPHA) * this._anchorY;
+        }
+        this._visible = true;
+    }
+
+    /** 왼손이 감지되지 않을 때 그리드 숨김 */
+    hide() {
+        this._visible = false;
+        this._anchorX = null;
+        this._anchorY = null;
+    }
+
+    /**
+     * 그리드 좌상단 좌표 계산 — 검지 위에 고정
      */
     _getOrigin(canvasW, canvasH) {
-        const x = (canvasW - GRID_TOTAL_W) / 2;
-        const y = canvasH - GRID_TOTAL_H - 24; // 하단 24px 여백
+        if (!this._visible || this._anchorX === null) return null;
+
+        let x = this._anchorX - GRID_TOTAL_W / 2;
+        let y = this._anchorY - GRID_TOTAL_H - 20;
+
+        // 화면 밖으로 나가지 않도록 클램핑
+        x = Math.max(4, Math.min(x, canvasW - GRID_TOTAL_W - 4));
+        y = Math.max(4, Math.min(y, canvasH - GRID_TOTAL_H - 4));
+
         return { x, y };
     }
 
@@ -53,6 +90,7 @@ export class ChordGrid {
      */
     draw(ctx, canvasW, canvasH) {
         const origin = this._getOrigin(canvasW, canvasH);
+        if (!origin) return;
 
         // 외곽선 박스
         ctx.save();
@@ -95,7 +133,6 @@ export class ChordGrid {
                 if (isActive) {
                     ctx.strokeStyle = COLOR_ACTIVE_BORDER;
                     ctx.lineWidth = 2.5;
-                    // 글로우 효과
                     ctx.shadowColor = COLOR_PRIMARY_GLOW;
                     ctx.shadowBlur = 12;
                 } else {
@@ -123,6 +160,7 @@ export class ChordGrid {
      */
     hitTest(px, py, canvasW, canvasH) {
         const origin = this._getOrigin(canvasW, canvasH);
+        if (!origin) return null;
 
         for (let row = 0; row < ROWS; row++) {
             for (let col = 0; col < COLS; col++) {
@@ -158,6 +196,11 @@ export class ChordGrid {
     /** 현재 활성 코드 반환 */
     getActiveChord() {
         return this.activeChord;
+    }
+
+    /** 그리드가 보이는지 여부 */
+    isVisible() {
+        return this._visible;
     }
 
     /** 둥근 사각형 경로 헬퍼 */

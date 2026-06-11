@@ -47,6 +47,7 @@ export class GestureDetector {
             this._prevStrumY = null;
             this._lastSelectedChord = null;
             this._chordHoldFrames = 0;
+            chordGrid?.hide();
             chordGrid?.setHovered(null);
             this.onStatusUpdate?.({
                 leftPinch: false,
@@ -70,13 +71,16 @@ export class GestureDetector {
             }
         });
 
-        // ---- 왼손(코드 선택): 검지 끝이 셀에 닿으면 바로 선택 ----
+        // ---- 왼손(코드 선택): 검지 끝 위에 그리드 고정 + 셀 터치 선택 ----
         let isTouching = false;
         if (chordHand && chordGrid) {
             const indexTip = chordHand[8]; // 검지 끝
             // 좌표 반전 (CSS video scaleX(-1)에 맞춤)
             const px = (1 - indexTip.x) * canvasW;
             const py = indexTip.y * canvasH;
+
+            // 검지 위치를 그리드 앵커로 설정 (EMA 스무딩)
+            chordGrid.setAnchor(px, py);
 
             const hitChord = chordGrid.hitTest(px, py, canvasW, canvasH);
             chordGrid.setHovered(hitChord);
@@ -99,6 +103,8 @@ export class GestureDetector {
                 this._chordHoldFrames = 0;
             }
         } else {
+            // 왼손 미감지 시 그리드 숨김
+            chordGrid?.hide();
             chordGrid?.setHovered(null);
             this._lastSelectedChord = null;
             this._chordHoldFrames = 0;
