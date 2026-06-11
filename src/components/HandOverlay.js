@@ -1,5 +1,5 @@
 /**
- * HandOverlay.js — 웹캠 캔버스 위에 손 skeleton 오버레이 렌더링
+ * HandOverlay.js — 웹캠 캔버스 위에 손 skeleton + 코드 존 오버레이 렌더링
  */
 
 import { handRole, toPixel } from '../utils/handUtils.js';
@@ -24,14 +24,20 @@ export class HandOverlay {
         this.ctx = canvas.getContext('2d');
         this.video = video;
         this.swapHands = false;
+        this.chordGrid = null; // ChordGrid 인스턴스 연결용
     }
 
     setSwapHands(swapped) {
         this.swapHands = swapped;
     }
 
+    /** ChordGrid 인스턴스 연결 */
+    setChordGrid(chordGrid) {
+        this.chordGrid = chordGrid;
+    }
+
     /**
-     * 프레임마다 호출 — 모든 손의 skeleton을 그림
+     * 프레임마다 호출 — 코드 존 + 손 skeleton을 그림
      * @param {Object} results MediaPipe Hands 결과
      */
     draw(results) {
@@ -42,28 +48,34 @@ export class HandOverlay {
         canvas.height = this.video.videoHeight;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        if (!results.multiHandLandmarks) return;
-
         // 미러 변환 적용 (비디오가 scaleX(-1)이므로 캔버스도 동일)
         ctx.save();
         ctx.translate(canvas.width, 0);
         ctx.scale(-1, 1);
 
-        results.multiHandLandmarks.forEach((landmarks, idx) => {
-            const label = results.multiHandedness[idx].label;
-            const role = handRole(label, this.swapHands);
+        // 코드 존 네모 그리기 (미러 변환 내에서)
+        if (this.chordGrid) {
+            this.chordGrid.draw(ctx, canvas.width, canvas.height);
+        }
 
-            // 왼손(코드) = 청록색, 오른손(스트럼) = 주황색
-            const color = role === 'chord'
-                ? 'rgba(6, 182, 212, 0.85)'
-                : 'rgba(249, 115, 22, 0.85)';
-            const dotColor = role === 'chord'
-                ? 'rgba(6, 182, 212, 1)'
-                : 'rgba(249, 115, 22, 1)';
+        // 손 skeleton 그리기
+        if (results.multiHandLandmarks) {
+            results.multiHandLandmarks.forEach((landmarks, idx) => {
+                const label = results.multiHandedness[idx].label;
+                const role = handRole(label, this.swapHands);
 
-            this._drawConnections(landmarks, color);
-            this._drawLandmarks(landmarks, dotColor);
-        });
+                // 왼손(코드) = 청록색, 오른손(스트럼) = 주황색
+                const color = role === 'chord'
+                    ? 'rgba(6, 182, 212, 0.85)'
+                    : 'rgba(249, 115, 22, 0.85)';
+                const dotColor = role === 'chord'
+                    ? 'rgba(6, 182, 212, 1)'
+                    : 'rgba(249, 115, 22, 1)';
+
+                this._drawConnections(landmarks, color);
+                this._drawLandmarks(landmarks, dotColor);
+            });
+        }
 
         ctx.restore();
     }

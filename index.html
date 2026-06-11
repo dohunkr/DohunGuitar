@@ -24,10 +24,6 @@
         </div>
         <div class="control-bar__center">
             <label class="slider-group">
-                <span class="slider-label">핀치 감도</span>
-                <input type="range" id="pinch-sensitivity" min="20" max="80" value="45" />
-            </label>
-            <label class="slider-group">
                 <span class="slider-label">스트로크 세기</span>
                 <input type="range" id="stroke-intensity" min="1" max="10" value="5" />
             </label>
@@ -46,10 +42,7 @@
 
     <!-- 메인 영역 -->
     <main id="app">
-        <!-- 코드 그리드 (왼쪽) -->
-        <aside id="chord-grid-container"></aside>
-
-        <!-- 웹캠 + 오버레이 (중앙) -->
+        <!-- 웹캠 + 오버레이 (전체 화면) -->
         <section id="camera-section">
             <video id="webcam" autoplay playsinline></video>
             <canvas id="overlay-canvas"></canvas>

@@ -13,10 +13,8 @@ import './styles/main.css';
 // ---- DOM 요소 ----
 const video = document.getElementById('webcam');
 const canvas = document.getElementById('overlay-canvas');
-const chordGridContainer = document.getElementById('chord-grid-container');
 const statusBarContainer = document.getElementById('status-bar');
 const currentChordEl = document.getElementById('current-chord');
-const pinchSlider = document.getElementById('pinch-sensitivity');
 const strokeSlider = document.getElementById('stroke-intensity');
 const previewToggle = document.getElementById('preview-toggle');
 const swapHandsToggle = document.getElementById('swap-hands');
@@ -30,8 +28,8 @@ const statusBar = new StatusBar(statusBarContainer);
 let selectedChord = null;
 let previewEnabled = false;
 
-// 코드 그리드
-const chordGrid = new ChordGrid(chordGridContainer, (chord) => {
+// 코드 그리드 (캔버스 오버레이 방식)
+const chordGrid = new ChordGrid((chord) => {
     selectedChord = chord;
     currentChordEl.textContent = chord;
     if (previewEnabled) {
@@ -39,12 +37,14 @@ const chordGrid = new ChordGrid(chordGridContainer, (chord) => {
     }
 });
 
+// HandOverlay에 ChordGrid 연결
+handOverlay.setChordGrid(chordGrid);
+
 // 제스처 감지기
 const gestureDetector = new GestureDetector({
     onChordSelect: (chord) => {
         selectedChord = chord;
         currentChordEl.textContent = chord;
-        chordGrid.setActive(chord);
         if (previewEnabled) {
             audioEngine.preview(chord);
         }
@@ -60,10 +60,6 @@ const gestureDetector = new GestureDetector({
 });
 
 // ---- UI 이벤트 바인딩 ----
-pinchSlider.addEventListener('input', (e) => {
-    gestureDetector.setPinchSensitivity(Number(e.target.value));
-});
-
 strokeSlider.addEventListener('input', (e) => {
     gestureDetector.setIntensityMultiplier(Number(e.target.value));
 });
@@ -78,99 +74,51 @@ swapHandsToggle.addEventListener('change', (e) => {
     handOverlay.setSwapHands(swapped);
 });
 
-// 스트럼 플래시 효과
+// ---- 스트럼 플래시 효과 ----
 function _flashStrum() {
-    const flash = document.createElement('div');
-    flash.className = 'strum-flash';
-    cameraSection.appendChild(flash);
-    flash.addEventListener('animationend', () => flash.remove());
-}
-
-// ---- FPS 카운터 ----
-let frameCount = 0;
-let lastFpsTime = performance.now();
-
-function updateFPS() {
-    frameCount++;
-    const now = performance.now();
-    if (now - lastFpsTime >= 1000) {
-        statusBar.updateFPS(frameCount);
-        frameCount = 0;
-        lastFpsTime = now;
-    }
+    cameraSection.classList.remove('strum-flash');
+    // reflow를 강제하여 애니메이션 재시작
+    void cameraSection.offsetWidth;
+    cameraSection.classList.add('strum-flash');
+    setTimeout(() => cameraSection.classList.remove('strum-flash'), 320);
 }
 
 // ---- MediaPipe Hands 초기화 ----
-async function initMediaPipe() {
-    // eslint-disable-next-line no-undef
-    const hands = new Hands({
-        locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-        },
-    });
+const hands = new window.Hands({
+    locateFile: (file) =>
+        `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+});
 
-    hands.setOptions({
-        maxNumHands: 2,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.7,
-        minTrackingConfidence: 0.5,
-    });
+hands.setOptions({
+    maxNumHands: 2,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.6,
+});
 
-    hands.onResults((results) => {
-        updateFPS();
-        handOverlay.draw(results);
+hands.onResults((results) => {
+    handOverlay.draw(results);
+    gestureDetector.process(results, chordGrid);
+});
 
-        const bounds = chordGrid.getButtonBounds(
-            video.videoWidth,
-            video.videoHeight
-        );
-        gestureDetector.process(results, bounds);
-    });
+// ---- 카메라 시작 ----
+const camera = new window.Camera(video, {
+    onFrame: async () => {
+        await hands.send({ image: video });
+    },
+    width: 1280,
+    height: 720,
+});
 
-    return hands;
-}
+camera.start().then(() => {
+    statusBar.setMessage('카메라 준비 완료 — 손을 코드 네모에 가져다 대세요');
+});
 
-// ---- 웹캠 시작 ----
-async function startCamera(hands) {
-    // eslint-disable-next-line no-undef
-    const camera = new Camera(video, {
-        onFrame: async () => {
-            await hands.send({ image: video });
-        },
-        width: 1280,
-        height: 720,
-    });
-
-    await camera.start();
-}
-
-// ---- 앱 시작 ----
-async function main() {
-    try {
-        // AudioContext는 사용자 상호작용 후 초기화
-        document.addEventListener(
-            'click',
-            () => {
-                audioEngine.init();
-            },
-            { once: true }
-        );
-
-        const hands = await initMediaPipe();
-        await startCamera(hands);
-
-        // 초기 슬라이더 값 적용
-        gestureDetector.setPinchSensitivity(Number(pinchSlider.value));
-        gestureDetector.setIntensityMultiplier(Number(strokeSlider.value));
-    } catch (err) {
-        console.error('DohunGuitar 초기화 실패:', err);
-        statusBarContainer.innerHTML = `
-      <div class="status-item">
-        <span class="status-dot error"></span>
-        <span>카메라 접근 실패 — 브라우저 권한을 확인하세요.</span>
-      </div>
-    `;
-    }
-}
-
-main();
+// AudioContext unlock (사용자 인터랙션 필요)
+document.addEventListener(
+    'click',
+    () => {
+        audioEngine.init();
+    },
+    { once: true }
+);

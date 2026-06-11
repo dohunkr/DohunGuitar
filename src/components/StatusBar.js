@@ -55,13 +55,13 @@ export class StatusBar {
             pickText.textContent = '오른손 피크 그립: 대기';
         }
 
-        // 왼손 핀치
+        // 왼손 코드 터치
         if (info.leftPinch) {
             pinchDot.className = 'status-dot active';
-            pinchText.textContent = '왼손 핀치: 감지됨';
+            pinchText.textContent = '왼손 코드 터치: 감지됨';
         } else {
             pinchDot.className = 'status-dot';
-            pinchText.textContent = '왼손 핀치: 대기';
+            pinchText.textContent = '왼손 코드 터치: 대기';
         }
     }
 
@@ -69,6 +69,13 @@ export class StatusBar {
     updateFPS(fps) {
         if (this._elements.fps) {
             this._elements.fps.textContent = `FPS: ${fps}`;
+        }
+    }
+
+    /** 메시지 표시 */
+    setMessage(msg) {
+        if (this._elements.fps) {
+            this._elements.fps.textContent = msg;
         }
     }
 }

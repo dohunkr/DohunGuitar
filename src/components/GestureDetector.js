@@ -1,8 +1,10 @@
 /**
- * GestureDetector.js — 핀치(코드 선택) & 스트로크(연주) 제스처 인식
+ * GestureDetector.js — 손 위치 기반 코드 선택 & 스트로크 제스처 인식
+ * 왼손 검지 tip이 코드 존 네모에 닿으면 코드 선택
+ * 오른손 위→아래 스와이프로 다운스트로크
  */
 
-import { isPinching, pinchCenter, strokeVelocity, handRole, isPickGrip } from '../utils/handUtils.js';
+import { strokeVelocity, handRole, isPickGrip } from '../utils/handUtils.js';
 
 export class GestureDetector {
     constructor({ onChordSelect, onStrum, onStatusUpdate }) {
@@ -11,7 +13,6 @@ export class GestureDetector {
         this.onStatusUpdate = onStatusUpdate;
 
         // 설정
-        this.pinchThreshold = 0.045;
         this.strumMinVelocity = 0.012;
         this.intensityMultiplier = 1;
         this.swapHands = false;
@@ -20,20 +21,15 @@ export class GestureDetector {
         this._prevStrumY = null;
         this._strumCooldown = false;
 
-        // 핀치 상태 (디바운스)
-        this._wasPinching = false;
-        this._pinchLock = false;
-    }
-
-    /** 핀치 감도 설정 (range 값 → threshold 변환) */
-    setPinchSensitivity(value) {
-        // 슬라이더 값 (20~80) → threshold (0.08~0.02): 높을수록 민감
-        this.pinchThreshold = 0.08 - (value / 100) * 0.06;
+        // 코드 선택 디바운스 (같은 코드 연속 선택 방지)
+        this._lastSelectedChord = null;
+        this._chordHoldFrames = 0;
+        this._chordSelectThreshold = 5; // 프레임 수만큼 유지해야 선택
     }
 
     /** 스트로크 세기 배율 설정 */
     setIntensityMultiplier(value) {
-        this.intensityMultiplier = value / 5; // 슬라이더 1~10 → 0.2~2.0
+        this.intensityMultiplier = value / 5;
     }
 
     /** 손 바꾸기 토글 */
@@ -44,13 +40,14 @@ export class GestureDetector {
     /**
      * MediaPipe 결과를 프레임마다 처리
      * @param {Object} results MediaPipe Hands 결과
-     * @param {Object} chordGridBounds 코드 그리드의 각 버튼 바운딩 정보
+     * @param {Object} chordGrid ChordGrid 인스턴스 (hitTest 사용)
      */
-    process(results, chordGridBounds) {
+    process(results, chordGrid) {
         if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
             this._prevStrumY = null;
-            this._wasPinching = false;
-            this._pinchLock = false;
+            this._lastSelectedChord = null;
+            this._chordHoldFrames = 0;
+            chordGrid?.setHovered(null);
             this.onStatusUpdate?.({
                 leftPinch: false,
                 rightPickGrip: false,
@@ -60,8 +57,6 @@ export class GestureDetector {
 
         let chordHand = null;
         let strumHand = null;
-        let chordHandLabel = null;
-        let strumHandLabel = null;
 
         // 각 손 분류
         results.multiHandLandmarks.forEach((landmarks, idx) => {
@@ -70,39 +65,42 @@ export class GestureDetector {
 
             if (role === 'chord') {
                 chordHand = landmarks;
-                chordHandLabel = label;
             } else {
                 strumHand = landmarks;
-                strumHandLabel = label;
             }
         });
 
-        // 상태 업데이트
-        const statusInfo = {
-            leftPinch: chordHand ? isPinching(chordHand, this.pinchThreshold) : false,
-            rightPickGrip: strumHand ? isPickGrip(strumHand) : false,
-        };
+        // ---- 왼손(코드 선택): 검지 tip 위치로 코드 존 충돌 감지 ----
+        let touchingChord = false;
+        if (chordHand && chordGrid) {
+            const indexTip = chordHand[8]; // 검지 끝
+            // 정규화 좌표 그대로 사용 (캔버스와 동일 좌표계)
+            const hitChord = chordGrid.hitTest(indexTip.x, indexTip.y);
 
-        // ---- 왼손(코드 선택): 핀치 감지 ----
-        if (chordHand) {
-            const pinching = isPinching(chordHand, this.pinchThreshold);
+            chordGrid.setHovered(hitChord);
 
-            if (pinching && !this._pinchLock) {
-                const center = pinchCenter(chordHand);
-                // 미러링 보정: x를 반전
-                const mirroredCenter = { x: 1 - center.x, y: center.y };
-                this._selectChordAtPosition(mirroredCenter, chordGridBounds);
-                this._pinchLock = true;
+            if (hitChord) {
+                touchingChord = true;
+                if (hitChord === this._lastSelectedChord) {
+                    this._chordHoldFrames++;
+                } else {
+                    this._lastSelectedChord = hitChord;
+                    this._chordHoldFrames = 1;
+                }
+
+                // 일정 프레임 유지 시 코드 선택 확정
+                if (this._chordHoldFrames === this._chordSelectThreshold) {
+                    chordGrid.setActive(hitChord);
+                    this.onChordSelect?.(hitChord);
+                }
+            } else {
+                this._lastSelectedChord = null;
+                this._chordHoldFrames = 0;
             }
-
-            if (!pinching) {
-                this._pinchLock = false;
-            }
-
-            this._wasPinching = pinching;
         } else {
-            this._wasPinching = false;
-            this._pinchLock = false;
+            chordGrid?.setHovered(null);
+            this._lastSelectedChord = null;
+            this._chordHoldFrames = 0;
         }
 
         // ---- 오른손(스트로크): 아래→ 스와이프 감지 ----
@@ -112,7 +110,6 @@ export class GestureDetector {
             if (this._prevStrumY !== null) {
                 const vel = strokeVelocity(this._prevStrumY, wristY);
 
-                // 다운스트로크: 양수 속도가 임계값 이상
                 if (vel > this.strumMinVelocity && !this._strumCooldown) {
                     const normalizedVel = Math.min(vel / 0.06, 1);
                     this.onStrum?.(normalizedVel, this.intensityMultiplier);
@@ -128,35 +125,10 @@ export class GestureDetector {
             this._prevStrumY = null;
         }
 
-        this.onStatusUpdate?.(statusInfo);
-    }
-
-    /**
-     * 핀치 위치를 코드 그리드 버튼과 매칭
-     * @param {Object} position {x, y} 정규화 좌표
-     * @param {Array} chordGridBounds 각 버튼의 바운딩 정보
-     */
-    _selectChordAtPosition(position, chordGridBounds) {
-        if (!chordGridBounds || chordGridBounds.length === 0) return;
-
-        // 가장 가까운 코드 버튼 찾기
-        let closest = null;
-        let minDist = Infinity;
-
-        chordGridBounds.forEach((bound) => {
-            const dx = position.x - bound.centerX;
-            const dy = position.y - bound.centerY;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (dist < minDist) {
-                minDist = dist;
-                closest = bound;
-            }
+        // 상태 업데이트
+        this.onStatusUpdate?.({
+            leftPinch: touchingChord,
+            rightPickGrip: strumHand ? isPickGrip(strumHand) : false,
         });
-
-        // 합리적인 거리 범위 내에서만 선택
-        if (closest && minDist < 0.15) {
-            this.onChordSelect?.(closest.chord);
-        }
     }
 }
