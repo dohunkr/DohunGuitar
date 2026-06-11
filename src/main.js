@@ -28,14 +28,8 @@ const statusBar = new StatusBar(statusBarContainer);
 let selectedChord = null;
 let previewEnabled = false;
 
-// 코드 그리드 (캔버스 오버레이 방식)
-const chordGrid = new ChordGrid((chord) => {
-    selectedChord = chord;
-    currentChordEl.textContent = chord;
-    if (previewEnabled) {
-        audioEngine.preview(chord);
-    }
-});
+// 코드 그리드 (캔버스 오버레이 방식 — 선택은 GestureDetector에서 처리)
+const chordGrid = new ChordGrid();
 
 // HandOverlay에 ChordGrid 연결
 handOverlay.setChordGrid(chordGrid);
@@ -98,7 +92,9 @@ hands.setOptions({
 
 hands.onResults((results) => {
     handOverlay.draw(results);
-    gestureDetector.process(results, chordGrid);
+    const cw = canvas.width || video.videoWidth;
+    const ch = canvas.height || video.videoHeight;
+    gestureDetector.process(results, chordGrid, cw, ch);
 });
 
 // ---- 카메라 시작 ----
@@ -111,7 +107,7 @@ const camera = new window.Camera(video, {
 });
 
 camera.start().then(() => {
-    statusBar.setMessage('카메라 준비 완료 — 손을 코드 네모에 가져다 대세요');
+    statusBar.setMessage('카메라 준비 완료 — 왼손 핀치로 코드 선택, 오른손 스트로크로 연주');
 });
 
 // AudioContext unlock (사용자 인터랙션 필요)

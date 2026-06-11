@@ -1,21 +1,25 @@
 /**
- * ChordGrid.js — 캔버스 위에 코드 존(네모)을 오버레이로 그리고,
- * 손 위치가 해당 영역에 닿으면 코드를 선택하는 컴포넌트
+ * ChordGrid.js — 왼손 손목 위치에 고정되는 2행 8열 코드 그리드
+ * 캔버스 위에 직접 렌더링, 핀치로 코드 선택
  */
 
-import { AudioEngine } from './AudioEngine.js';
+// 코드 배열: 2행 8열
+const ROW1 = ['C', 'D', 'E', 'F', 'G', 'A', 'E7', 'B7'];
+const ROW2 = ['C7', 'Dm', 'Em', 'Fm', 'G7', 'A7', 'Am', 'F'];
+const GRID = [ROW1, ROW2];
 
-const CHORDS = AudioEngine.getChordNames();
+const COLS = 8;
+const ROWS = 2;
 
-// 그리드 설정: 왼쪽 영역에 5행 3열 배치
-const GRID_COLS = 3;
-const GRID_ROWS = Math.ceil(CHORDS.length / GRID_COLS);
+// 셀 크기 (픽셀)
+const CELL_W = 70;
+const CELL_H = 50;
+const CELL_GAP = 4;
+const GRID_PADDING = 6;
 
-// 코드 존 영역 (정규화 좌표 0~1 기준)
-const ZONE_LEFT = 0.02;
-const ZONE_TOP = 0.05;
-const ZONE_WIDTH = 0.28;
-const ZONE_HEIGHT = 0.88;
+// 전체 그리드 크기
+const GRID_W = COLS * CELL_W + (COLS - 1) * CELL_GAP + GRID_PADDING * 2;
+const GRID_H = ROWS * CELL_H + (ROWS - 1) * CELL_GAP + GRID_PADDING * 2;
 
 export class ChordGrid {
     /**
@@ -25,119 +29,144 @@ export class ChordGrid {
         this.onSelect = onSelect;
         this.activeChord = null;
         this.hoveredChord = null;
-        this._zones = this._buildZones();
-    }
+        this.visible = false;
 
-    /** 각 코드의 정규화 바운딩 영역 계산 */
-    _buildZones() {
-        const cellW = ZONE_WIDTH / GRID_COLS;
-        const cellH = ZONE_HEIGHT / GRID_ROWS;
-        const pad = 0.005; // 셀 간 패딩
-
-        return CHORDS.map((chord, i) => {
-            const col = i % GRID_COLS;
-            const row = Math.floor(i / GRID_COLS);
-            return {
-                chord,
-                x: ZONE_LEFT + col * cellW + pad,
-                y: ZONE_TOP + row * cellH + pad,
-                w: cellW - pad * 2,
-                h: cellH - pad * 2,
-            };
-        });
+        // 그리드 기준점 (왼손 손목 픽셀 좌표)
+        this._anchorX = 0;
+        this._anchorY = 0;
     }
 
     /**
-     * 캔버스에 코드 존 네모들을 그림
+     * 왼손 손목 좌표로 그리드 위치 업데이트
+     * @param {number} px 손목 x (캔버스 픽셀)
+     * @param {number} py 손목 y (캔버스 픽셀)
+     */
+    setAnchor(px, py) {
+        this._anchorX = px;
+        this._anchorY = py;
+        this.visible = true;
+    }
+
+    /** 왼손 미감지 시 그리드 숨김 */
+    hide() {
+        this.visible = false;
+    }
+
+    /**
+     * 그리드 좌상단 좌표 계산 (손목이 정중앙)
+     */
+    _getOrigin() {
+        return {
+            x: this._anchorX - GRID_W / 2,
+            y: this._anchorY - GRID_H / 2,
+        };
+    }
+
+    /**
+     * 캔버스에 코드 그리드 렌더링
      * @param {CanvasRenderingContext2D} ctx
-     * @param {number} canvasW 캔버스 폭 (px)
-     * @param {number} canvasH 캔버스 높이 (px)
+     * @param {number} canvasW
+     * @param {number} canvasH
      */
     draw(ctx, canvasW, canvasH) {
-        this._zones.forEach((zone) => {
-            const x = zone.x * canvasW;
-            const y = zone.y * canvasH;
-            const w = zone.w * canvasW;
-            const h = zone.h * canvasH;
+        if (!this.visible) return;
 
-            const isActive = zone.chord === this.activeChord;
-            const isHovered = zone.chord === this.hoveredChord;
+        const origin = this._getOrigin();
 
-            // 배경
-            if (isActive) {
-                ctx.fillStyle = 'rgba(99, 102, 241, 0.45)';
-            } else if (isHovered) {
-                ctx.fillStyle = 'rgba(99, 102, 241, 0.25)';
-            } else {
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+        // 외곽선 박스
+        ctx.save();
+        ctx.strokeStyle = '#00BCD4';
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        this._roundRect(ctx, origin.x, origin.y, GRID_W, GRID_H, 8);
+        ctx.stroke();
+
+        // 반투명 배경
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fill();
+        ctx.restore();
+
+        // 각 셀 그리기
+        for (let row = 0; row < ROWS; row++) {
+            for (let col = 0; col < COLS; col++) {
+                const chord = GRID[row][col];
+                const cellX = origin.x + GRID_PADDING + col * (CELL_W + CELL_GAP);
+                const cellY = origin.y + GRID_PADDING + row * (CELL_H + CELL_GAP);
+
+                const isActive = chord === this.activeChord;
+                const isHovered = chord === this.hoveredChord;
+
+                ctx.save();
+
+                // 셀 배경
+                if (isActive) {
+                    ctx.fillStyle = 'rgba(0, 188, 212, 0.4)';
+                } else if (isHovered) {
+                    ctx.fillStyle = 'rgba(0, 188, 212, 0.2)';
+                } else {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                }
+
+                this._roundRect(ctx, cellX, cellY, CELL_W, CELL_H, 4);
+                ctx.fill();
+
+                // 셀 테두리
+                if (isActive) {
+                    ctx.strokeStyle = '#00BCD4';
+                    ctx.lineWidth = 2;
+                } else {
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.lineWidth = 1;
+                }
+                ctx.stroke();
+
+                // 코드 텍스트
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 16px "DM Sans", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(chord, cellX + CELL_W / 2, cellY + CELL_H / 2);
+
+                ctx.restore();
             }
-
-            // 둥근 모서리 사각형
-            const r = Math.min(w, h) * 0.12;
-            ctx.beginPath();
-            ctx.moveTo(x + r, y);
-            ctx.lineTo(x + w - r, y);
-            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-            ctx.lineTo(x + w, y + h - r);
-            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-            ctx.lineTo(x + r, y + h);
-            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-            ctx.lineTo(x, y + r);
-            ctx.quadraticCurveTo(x, y, x + r, y);
-            ctx.closePath();
-            ctx.fill();
-
-            // 테두리
-            ctx.strokeStyle = isActive
-                ? 'rgba(99, 102, 241, 0.9)'
-                : 'rgba(255, 255, 255, 0.3)';
-            ctx.lineWidth = isActive ? 2.5 : 1;
-            ctx.stroke();
-
-            // 코드 이름 텍스트
-            const fontSize = Math.max(12, Math.min(w * 0.35, h * 0.35));
-            ctx.font = `bold ${fontSize}px "Inter", sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillStyle = isActive
-                ? 'rgba(255, 255, 255, 1)'
-                : 'rgba(255, 255, 255, 0.8)';
-            ctx.fillText(zone.chord, x + w / 2, y + h / 2);
-        });
+        }
     }
 
     /**
-     * 손 위치(정규화 좌표)로 코드 존 충돌 감지
-     * @param {number} nx 정규화 x (0~1, 미러 보정 전)
-     * @param {number} ny 정규화 y (0~1)
-     * @returns {string|null} 해당 코드 이름 또는 null
+     * 핀치 위치(캔버스 픽셀)로 코드 존 충돌 감지
+     * @param {number} px 검지 tip x (캔버스 픽셀)
+     * @param {number} py 검지 tip y (캔버스 픽셀)
+     * @returns {string|null}
      */
-    hitTest(nx, ny) {
-        for (const zone of this._zones) {
-            if (
-                nx >= zone.x &&
-                nx <= zone.x + zone.w &&
-                ny >= zone.y &&
-                ny <= zone.y + zone.h
-            ) {
-                return zone.chord;
+    hitTest(px, py) {
+        if (!this.visible) return null;
+
+        const origin = this._getOrigin();
+
+        for (let row = 0; row < ROWS; row++) {
+            for (let col = 0; col < COLS; col++) {
+                const cellX = origin.x + GRID_PADDING + col * (CELL_W + CELL_GAP);
+                const cellY = origin.y + GRID_PADDING + row * (CELL_H + CELL_GAP);
+
+                if (
+                    px >= cellX &&
+                    px <= cellX + CELL_W &&
+                    py >= cellY &&
+                    py <= cellY + CELL_H
+                ) {
+                    return GRID[row][col];
+                }
             }
         }
         return null;
     }
 
-    /**
-     * 호버 상태 업데이트 (매 프레임 호출)
-     * @param {string|null} chord
-     */
+    /** 호버 상태 업데이트 */
     setHovered(chord) {
         this.hoveredChord = chord;
     }
 
-    /**
-     * 활성 코드 설정
-     * @param {string} chord
-     */
+    /** 활성 코드 설정 */
     setActive(chord) {
         if (chord && chord !== this.activeChord) {
             this.activeChord = chord;
@@ -148,5 +177,20 @@ export class ChordGrid {
     /** 현재 활성 코드 반환 */
     getActiveChord() {
         return this.activeChord;
+    }
+
+    /** 둥근 사각형 경로 헬퍼 */
+    _roundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
     }
 }

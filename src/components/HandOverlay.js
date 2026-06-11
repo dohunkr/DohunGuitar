@@ -1,8 +1,10 @@
 /**
- * HandOverlay.js — 웹캠 캔버스 위에 손 skeleton + 코드 존 오버레이 렌더링
+ * HandOverlay.js — 웹캠 캔버스 위에 손 skeleton + 코드 그리드 오버레이 렌더링
+ * CSS transform: scaleX(-1)로 거울 반전 처리하므로 캔버스 내에서는 반전하지 않음
+ * 대신 MediaPipe 좌표의 x를 1-x로 보정하여 반전된 화면과 일치시킴
  */
 
-import { handRole, toPixel } from '../utils/handUtils.js';
+import { handRole } from '../utils/handUtils.js';
 
 // MediaPipe Hand 랜드마크 연결 정보
 const HAND_CONNECTIONS = [
@@ -24,7 +26,7 @@ export class HandOverlay {
         this.ctx = canvas.getContext('2d');
         this.video = video;
         this.swapHands = false;
-        this.chordGrid = null; // ChordGrid 인스턴스 연결용
+        this.chordGrid = null;
     }
 
     setSwapHands(swapped) {
@@ -37,25 +39,25 @@ export class HandOverlay {
     }
 
     /**
-     * 프레임마다 호출 — 코드 존 + 손 skeleton을 그림
+     * 프레임마다 호출 — 코드 그리드 + 손 skeleton을 그림
      * @param {Object} results MediaPipe Hands 결과
      */
     draw(results) {
         const { canvas, ctx } = this;
+        const w = this.video.videoWidth;
+        const h = this.video.videoHeight;
 
         // 캔버스 크기를 비디오에 맞춤
-        canvas.width = this.video.videoWidth;
-        canvas.height = this.video.videoHeight;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.width = w;
+        canvas.height = h;
+        ctx.clearRect(0, 0, w, h);
 
-        // 미러 변환 적용 (비디오가 scaleX(-1)이므로 캔버스도 동일)
-        ctx.save();
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
+        // CSS scaleX(-1)로 전체 캔버스가 반전되므로
+        // 캔버스 내에서는 좌표만 x = 1-x 보정하여 그림
 
-        // 코드 존 네모 그리기 (미러 변환 내에서)
+        // 코드 그리드 그리기 (GestureDetector에서 setAnchor로 위치 설정됨)
         if (this.chordGrid) {
-            this.chordGrid.draw(ctx, canvas.width, canvas.height);
+            this.chordGrid.draw(ctx, w, h);
         }
 
         // 손 skeleton 그리기
@@ -72,24 +74,22 @@ export class HandOverlay {
                     ? 'rgba(6, 182, 212, 1)'
                     : 'rgba(249, 115, 22, 1)';
 
-                this._drawConnections(landmarks, color);
-                this._drawLandmarks(landmarks, dotColor);
+                this._drawConnections(landmarks, color, w, h);
+                this._drawLandmarks(landmarks, dotColor, w, h);
             });
         }
-
-        ctx.restore();
     }
 
-    /** 연결선 그리기 */
-    _drawConnections(landmarks, color) {
-        const { ctx, canvas } = this;
+    /** 연결선 그리기 (x 반전 적용) */
+    _drawConnections(landmarks, color, w, h) {
+        const { ctx } = this;
         ctx.strokeStyle = color;
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
 
         HAND_CONNECTIONS.forEach(([from, to]) => {
-            const a = toPixel(landmarks[from], canvas.width, canvas.height);
-            const b = toPixel(landmarks[to], canvas.width, canvas.height);
+            const a = this._toPixelMirrored(landmarks[from], w, h);
+            const b = this._toPixelMirrored(landmarks[to], w, h);
 
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
@@ -98,16 +98,24 @@ export class HandOverlay {
         });
     }
 
-    /** 랜드마크 점 그리기 */
-    _drawLandmarks(landmarks, color) {
-        const { ctx, canvas } = this;
+    /** 랜드마크 점 그리기 (x 반전 적용) */
+    _drawLandmarks(landmarks, color, w, h) {
+        const { ctx } = this;
         ctx.fillStyle = color;
 
         landmarks.forEach((lm) => {
-            const p = toPixel(lm, canvas.width, canvas.height);
+            const p = this._toPixelMirrored(lm, w, h);
             ctx.beginPath();
             ctx.arc(p.x, p.y, 4, 0, 2 * Math.PI);
             ctx.fill();
         });
+    }
+
+    /** 랜드마크를 반전된 캔버스 픽셀 좌표로 변환 */
+    _toPixelMirrored(lm, w, h) {
+        return {
+            x: (1 - lm.x) * w,
+            y: lm.y * h,
+        };
     }
 }
